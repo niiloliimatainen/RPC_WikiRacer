@@ -39,6 +39,7 @@ def start_server():
             run_time = round((end - start), 2)
             key = result.keys()[0]
             path = result[key]
+            # - starting page
             path_length = len(path) - 1
 
             json_data = json.dumps({"path": path, "time": run_time, "length": path_length})

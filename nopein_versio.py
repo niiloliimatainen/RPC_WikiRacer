@@ -8,23 +8,21 @@
 # https://www.geeksforgeeks.org/python-set-difference/
 #########################################
 import requests
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from multiprocessing import Manager
 import traceback
 import time
 import re
 import threading
 
-URL = "https://en.wikipedia.org/w/api.php"
+URL_API = "https://fi.wikipedia.org/w/api.php"
+URL_WIKI = "https://fi.wikipedia.org/wiki/"
 
 
 # The function will return all the hyperlinks that are in the given Wikipedia page
 # This function is made from the Wikipedia API documentation's example
 def get_links(node):
 	try:
-		
-		counter = 0
-		titles = 0
 		title_filter = "Category:|Template:|Template talk:|Wikipedia:|Book:|Portal:|Help:|File:|MediaWiki:|MediaWiki talk|User talk:|Wikipedia talk:|Draft:|User:|Talk:|Module:"
 		link_list = []
 		session = requests.Session()
@@ -37,44 +35,44 @@ def get_links(node):
 			"pldir": "descending"
 		}
 
-		response = session.get(url=URL, params=PARAMS)
+		response = session.get(url=URL_API, params=PARAMS)
 		data = response.json()
 		pages = data["query"]["pages"]
 
 		for key, value in pages.items():
 			for link in value["links"]:
-				counter += 1
 				if not re.search(title_filter, link["title"]):
-					titles += 1
 					link_list.append(link["title"])
 		
 		while "continue" in data:
 			PARAMS["plcontinue"] = data["continue"]["plcontinue"]
-			response = session.get(url=URL, params=PARAMS)
+			response = session.get(url=URL_API, params=PARAMS)
 			data = response.json()
 			pages = data["query"]["pages"]
 
 			for key, value in pages.items():
 				for link in value["links"]:
-					counter += 1
 					if not re.search(title_filter, link["title"]):
-						titles += 1
 						link_list.append(link["title"])	
 		return link_list
+	
+
+	# This occurs if there are no links in the page
 	except Exception:
-		traceback.print_exc()
 		return []
 
 
 # Function to fetch all the links for each node in parallel
-def fetch_links(path, links_dict):
+def fetch_links(links, links_dict):
+	counter = 0
 	# Creating a threadpool with own worker for each node
-	with ThreadPoolExecutor(max_workers=len(path)) as executor:
+	with ThreadPoolExecutor() as executor:
 		futures = {}
 
-		for node in path:
+		for node in links:
 			# If node's links aren't found yet, then get the links
 			if not links_dict.get(node):
+				counter += 1
 				futures[executor.submit(get_links, node)] = node
 		
 		# Looping through futures and taking the result when future is completed
@@ -83,72 +81,109 @@ def fetch_links(path, links_dict):
 				links_dict[futures[future]] = future.result()
 			except Exception:
 				links_dict[node] = []
-
+	print(counter)
 
 
 # Function to validate if start and end pages are valid
 def page_validation(title):
 	try:
-		response = requests.get("https://en.wikipedia.org/wiki/" + title)
+		response = requests.get(URL_WIKI + title)
 		if response.status_code == 404:
 			return 0
 		return 1
 	except:
-		print("Exception happened in request!")
+		traceback.print_exc()
+		return 0
 
 
 
-def find_shortest_path(page, end_page, path, shortest_path):
-	if page.lower() == end_page.lower():
-		new_path = path + [page]
-		shortest_path[len(new_path)] = new_path
-		return True
-	else:
-		return False
+def find_shortest_path(end_page, links, node, path, shortest_path):
+	for page in links:
+		if page == end_page:
+			new_path = path + [node, page]
+			shortest_path[len(new_path)] = new_path
+			return True
+	return False
 
 
 def breadth_first_search(start_page, end_page):
-	# Testing that start and end pages are valid
-	if not page_validation(start_page) or not page_validation (end_page):
-		return "Invalid start or end page!"
+	try:
+		# Testing that start and end pages are valid
+		if len(start_page) == 0 or len(end_page) == 0:
+			return -1
+		
+		elif not page_validation(start_page) or not page_validation (end_page):
+			return -1
+		
+		# Making sure that the format is correct if the pages are valid
+		else:
+			start_page = start_page.lower()
+			end_page = end_page.lower()
+			start_page = start_page.replace(start_page[0], start_page[0].upper())
+			end_page = end_page.replace(end_page[0], end_page[0].upper())
 
-	# Path and link dictionaries for nodes
-	shortest_path = Manager().dict()
-	links_dict = Manager().dict()
+		# Path and link dictionaries for nodes
+		shortest_path = Manager().dict()
+		links_dict = Manager().dict()
 
-	# Queue with tuple that holds page title and path to it
-	queue = [(start_page, [start_page])]
-	visited = []
+		# Queue with tuple that holds page title and path to it
+		queue = [(start_page, [start_page])]
+		links = get_links(start_page)
+		
+		# Test if end page is a direct link from the starting page
+		if end_page in links:
+			shortest_path[2] = [start_page, end_page]
+			return shortest_path
 
-	while queue:
-		# Removing the first tuple in queue
-		node, path = queue.pop(0)
-		fetch_links(path, links_dict)
-		# Loop through all the nodes in path except the destination
-		for n in path:
-			if n not in visited:
-				links = links_dict[n]
-				visited.append(n)
-				if end_page in links:
-					for page in links:
-						if page == end_page:
-							new_path = path + [page]
-							shortest_path[len(new_path)] = new_path
-							return shortest_path	
-				for page in links:
-					queue.append((page, path + [page]))
-	return shortest_path
+		links_dict[start_page] = links
+		visited = []
+
+		while queue:
+			# Removing the first tuple in queue
+			node, path = queue.pop(0)
+			# Test if the node is already visiteds
+			if node in visited:
+				continue
+			links = links_dict[node]
+			visited.append(node)
+
+			# Max workers are cpu.count() + 4
+			with ThreadPoolExecutor() as executor:
+				futures = {}
+
+				for node in links:
+					# If node's links aren't found yet, then get the links
+					if not links_dict.get(node):
+						futures[executor.submit(get_links, node)] = node
+				
+				# Looping through futures and taking the result when future is completed
+				for future in as_completed(futures):
+					try:
+						new_node = futures[future]
+						new_links = future.result()
+						if find_shortest_path(end_page, new_links, new_node, path, shortest_path):
+							return shortest_path
+						links_dict[new_node] = new_links
+						queue.append((new_node, path + [new_node]))
+
+					except Exception:
+						links_dict[node] = []
+
+		return shortest_path
+	except Exception:
+		traceback.print_exc()
+		return 0
 					
 
 def main():
 	start = time.time()
-	start_page = "Finland"
-	end_page = "Computer"
+	start_page = "Rakennus"
+	end_page = "Auto"
 	shortest_path = breadth_first_search(start_page, end_page)
 	end = time.time()
-	run_time = (end - start) / 60
+	run_time = end - start
 	print(shortest_path)
-	print(f"Runtime of the algorithm was {round(run_time, 2)} minutes!")
+	print(f"Runtime of the algorithm was {round(run_time, 2)} seconds!")
 
 
 
