@@ -2,6 +2,8 @@
 # Niilo Liimatainen
 # 29.03.2021
 # Sources:
+# https://docs.python.org/3/library/socketserver.html#socketserver.ThreadingMixIn
+# https://docs.python.org/3/library/xmlrpc.server.html#simplexmlrpcserver-example
 #########################################
 import xmlrpc.client
 import datetime
@@ -12,14 +14,15 @@ def main():
     try:
         # Proxy instance allows us to use methods from the server
         proxy = xmlrpc.client.ServerProxy("http://127.0.0.1:8000")
-        # Test to see if the server is availables
+        # Test to see if the server is available
         proxy.test()
         
         print("\nYou can use this program to race through Wikipedia!")
         while True:
-            print("1) Find the shortest path between two Wikipedia page")
+            print("1) Find the shortest path between two Wikipedia pages")
             print("0) Exit")
             user_input = input("Your choice: ") 
+            
             if not user_input.isdigit():
                 print("Choice must be a number!\n")
                 continue
@@ -40,7 +43,6 @@ def main():
                 print("Invalid choice!\n")
     
     except Exception:
-        #import traceback; traceback.print_exc();
         print("Server is unavailable, try again later!")
 
 
@@ -65,7 +67,7 @@ def print_results(json_object, start_page, end_page):
                     result += f" -> ({degree}){page} "
                 degree += 1
 
-            print(f"The shortest path between '{start_page}' and '{end_page}':")
+            print(f"\nThe shortest path between '{start_page}' and '{end_page}':")
             print(f"{result}")
             print(f"Path was {json_object['length']} degrees long and it was found in {json_object['time']} seconds!")
         else:

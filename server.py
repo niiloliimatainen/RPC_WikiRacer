@@ -1,8 +1,9 @@
 #########################################
 # Niilo Liimatainen
-# 16.03.2021
+# 29.03.2021
 # Sources:
-# 
+# https://docs.python.org/3/library/socketserver.html#socketserver.ThreadingMixIn
+# https://docs.python.org/3/library/xmlrpc.server.html#simplexmlrpcserver-example
 #########################################
 from xmlrpc.server import SimpleXMLRPCServer
 from xmlrpc.server import SimpleXMLRPCRequestHandler

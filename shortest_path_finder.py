@@ -13,7 +13,6 @@ from multiprocessing import Manager
 import traceback
 import time
 import re
-import threading
 
 URL_API = "https://fi.wikipedia.org/w/api.php"
 URL_WIKI = "https://fi.wikipedia.org/wiki/"
@@ -100,7 +99,7 @@ def fetch_links(end_page, path, links, queue, links_dict, shortest_path):
 # Helper function to check if the end page is in the given links
 def find_shortest_path(end_page, links, node, path, shortest_path):
 	for page in links:
-		if page == end_page:
+		if page.lower() == end_page.lower():
 			new_path = path + [node, page]
 			shortest_path[len(new_path)] = new_path
 			return True
@@ -116,14 +115,7 @@ def breadth_first_search(start_page, end_page):
 		
 		elif not page_validation(start_page) or not page_validation (end_page):
 			return -1
-		
-		# Making sure that the format is correct if the pages are valid
-		else:
-			start_page = start_page.lower()
-			end_page = end_page.lower()
-			start_page = start_page.replace(start_page[0], start_page[0].upper())
-			end_page = end_page.replace(end_page[0], end_page[0].upper())
-
+			
 		# Path and link dictionaries for nodes
 		shortest_path = Manager().dict()
 		links_dict = Manager().dict()
@@ -134,9 +126,10 @@ def breadth_first_search(start_page, end_page):
 		links = get_links(start_page)
 		
 		# Test if end page is a direct link from the starting page
-		if end_page in links:
-			shortest_path[2] = [start_page, end_page]
-			return shortest_path
+		for page in links:
+			if page.lower() == end_page.lower():
+				shortest_path[2] = [start_page, end_page]
+				return shortest_path
 
 		links_dict[start_page] = links
 		visited = []
@@ -162,8 +155,8 @@ def breadth_first_search(start_page, end_page):
 # The main function for independent runs 
 def main():
 	start = time.time()
-	start_page = "Rakennus"
-	end_page = "Auto"
+	start_page = "Jääkiekko"
+	end_page = "Lahti"
 	shortest_path = breadth_first_search(start_page, end_page)
 	end = time.time()
 	run_time = end - start
